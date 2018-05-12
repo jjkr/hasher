@@ -2,7 +2,10 @@ package main
 
 import (
 	"log"
+	"net/http"
+	"net/url"
 	"testing"
+	"time"
 )
 
 func TestHashPassword(t *testing.T) {
@@ -30,15 +33,6 @@ func TestHashPasswordEmpty(t *testing.T) {
 	}
 }
 
-func TestHashStore(t *testing.T) {
-	store := NewStore()
-	const testKey uint64 = 2
-	const testHash string = "xVChQ1m2AB9Yg5AUL"
-	store.Insert(testKey, testHash)
-
-	log.Println(store.Find(testKey))
-}
-
 func BenchmarkHashPassword(b *testing.B) {
 	pw := "hello"
 	for i := 0; i < b.N; i++ {
@@ -49,6 +43,59 @@ func BenchmarkHashPassword(b *testing.B) {
 	}
 }
 
+func TestGenerateUuid(t *testing.T) {
+	id1, _ := GenerateUuid()
+	time.Sleep(time.Millisecond)
+	id2, _ := GenerateUuid()
+	log.Printf("id1: %s\n", id1)
+	log.Printf("id2: %s\n", id2)
+	if id2 <= id1 {
+		t.Errorf("Id2(%s) is less than Id1(%s)", id2, id1)
+	}
+}
+
+func BenchmarkGenerateUuid(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_, err := GenerateUuid()
+		if err != nil {
+			b.Error(err)
+		}
+	}
+}
+
 func TestServer(t *testing.T) {
-	//server := NewServer(8080, 5000)
+	server := NewServer(8080, 5000)
+	go server.Listen()
+	server.Close()
+}
+
+func TestPostHash(t *testing.T) {
+	server := NewServer(8080, 5000)
+	go server.Listen()
+
+	resp, err := http.PostForm("http://localhost:8080/hash", url.Values{"password": {"PeachPie"}})
+	if err != nil {
+		t.Error(err)
+	}
+	log.Print(resp)
+
+	if resp.StatusCode != 200 {
+		t.Errorf("POST /hash got bad status: %d\n", resp.StatusCode)
+	}
+
+	server.Close()
+}
+
+func BenchmarkPostHash(b *testing.B) {
+	server := NewServer(8080, 5000)
+	go server.Listen()
+	for i := 0; i < b.N; i++ {
+		resp, err := http.PostForm("http://localhost:8080/hash", url.Values{"password": {"PeachPie"}})
+		if err != nil {
+			b.Error(err)
+		}
+		defer resp.Body.Close()
+	}
+
+	server.Close()
 }
