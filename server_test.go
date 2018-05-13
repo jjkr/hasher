@@ -43,10 +43,10 @@ func BenchmarkHashPassword(b *testing.B) {
 	}
 }
 
-func TestGenerateUuid(t *testing.T) {
-	id1, _ := GenerateUuid()
+func TestGenerateId(t *testing.T) {
+	id1, _ := GenerateId()
 	time.Sleep(time.Millisecond)
-	id2, _ := GenerateUuid()
+	id2, _ := GenerateId()
 	log.Printf("id1: %s\n", id1)
 	log.Printf("id2: %s\n", id2)
 	if id2 <= id1 {
@@ -54,9 +54,9 @@ func TestGenerateUuid(t *testing.T) {
 	}
 }
 
-func BenchmarkGenerateUuid(b *testing.B) {
+func BenchmarkGenerateId(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_, err := GenerateUuid()
+		_, err := GenerateId()
 		if err != nil {
 			b.Error(err)
 		}
@@ -64,7 +64,7 @@ func BenchmarkGenerateUuid(b *testing.B) {
 }
 
 func TestServer(t *testing.T) {
-	server := NewServer(8080, 5000)
+	server := NewServer(8080, time.Millisecond)
 	go server.Listen()
 	server.Close()
 }
