@@ -1,9 +1,12 @@
 package main
 
 import (
+	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
+	//"strings"
 	"testing"
 	"time"
 )
@@ -43,59 +46,87 @@ func BenchmarkHashPassword(b *testing.B) {
 	}
 }
 
-func TestGenerateId(t *testing.T) {
-	id1, _ := GenerateId()
-	time.Sleep(time.Millisecond)
-	id2, _ := GenerateId()
-	log.Printf("id1: %s\n", id1)
-	log.Printf("id2: %s\n", id2)
-	if id2 <= id1 {
-		t.Errorf("Id2(%s) is less than Id1(%s)", id2, id1)
-	}
-}
-
-func BenchmarkGenerateId(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		_, err := GenerateId()
-		if err != nil {
-			b.Error(err)
-		}
-	}
-}
+//func TestGenerateId(t *testing.T) {
+//	id1, _ := GenerateId()
+//	time.Sleep(time.Millisecond)
+//	id2, _ := GenerateId()
+//	log.Printf("id1: %s\n", id1)
+//	log.Printf("id2: %s\n", id2)
+//	if id2 <= id1 {
+//		t.Errorf("Id2(%s) is less than Id1(%s)", id2, id1)
+//	}
+//}
+//
+//func BenchmarkGenerateId(b *testing.B) {
+//	for i := 0; i < b.N; i++ {
+//		_, err := GenerateId()
+//		if err != nil {
+//			b.Error(err)
+//		}
+//	}
+//}
 
 func TestServer(t *testing.T) {
 	server := NewServer(8080, time.Millisecond)
-	go server.Listen()
-	server.Close()
+
+	server.Shutdown()
+	<-server.Done
 }
 
-func TestPostHash(t *testing.T) {
-	server := NewServer(8080, 5000)
-	go server.Listen()
+func TestHashIntegration(t *testing.T) {
+	server := NewServer(8081, time.Nanosecond)
+	client := &http.Client{}
 
-	resp, err := http.PostForm("http://localhost:8080/hash", url.Values{"password": {"PeachPie"}})
+	postResponse, err := client.PostForm(
+		"http://localhost:8081/hash",
+		url.Values{"password": {"PeachPie"}})
 	if err != nil {
 		t.Error(err)
 	}
-	log.Print(resp)
-
-	if resp.StatusCode != 200 {
-		t.Errorf("POST /hash got bad status: %d\n", resp.StatusCode)
+	id, err := ioutil.ReadAll(postResponse.Body)
+	postResponse.Body.Close()
+	if err != nil {
+		t.Error(err)
 	}
+	if postResponse.StatusCode != 200 {
+		t.Errorf("POST /hash got bad status: %d\n", postResponse.StatusCode)
+	}
+	log.Println(string(id))
 
-	server.Close()
+	getResponse, err := client.Get("http://localhost:8081/hash/" + string(id))
+	if err != nil {
+		t.Error(err)
+	}
+	hash, err := ioutil.ReadAll(getResponse.Body)
+	getResponse.Body.Close()
+	if err != nil {
+		t.Error(err)
+	}
+	log.Println(string(hash))
+
+	shutdownResponse, err := client.Get("http://localhost:8081/shutdown")
+	if err != nil {
+		t.Error(err)
+	}
+	io.Copy(ioutil.Discard, shutdownResponse.Body)
+	shutdownResponse.Body.Close()
+
+	<-server.Done
 }
 
 func BenchmarkPostHash(b *testing.B) {
-	server := NewServer(8080, 5000)
-	go server.Listen()
+	server := NewServer(8082, 5000)
+	client := &http.Client{}
+	formValues := url.Values{"password": {"PeachPie"}}
 	for i := 0; i < b.N; i++ {
-		resp, err := http.PostForm("http://localhost:8080/hash", url.Values{"password": {"PeachPie"}})
+		resp, err := client.PostForm("http://localhost:8082/hash", formValues)
 		if err != nil {
 			b.Error(err)
 		}
-		defer resp.Body.Close()
+		io.Copy(ioutil.Discard, resp.Body)
+		resp.Body.Close()
 	}
 
-	server.Close()
+	server.Shutdown()
+	<-server.Done
 }
