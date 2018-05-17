@@ -16,49 +16,9 @@ import (
 	"runtime"
 	//"strconv"
 	//"strings"
-	"sync"
+	//"sync"
 	"time"
 )
-
-// Base64 Encoded sha512 sum of given password
-//func HashPassword(pw string) (string, error) {
-//	hash := sha512.New()
-//	_, err := hash.Write([]byte(pw))
-//	if err != nil {
-//		return "", err
-//	}
-//	return base64.StdEncoding.EncodeToString(hash.Sum(nil)), nil
-//}
-
-type Stats struct {
-	Total   int64 `json:"total"`
-	Average int64 `json:"average"`
-}
-
-type StatsCounter struct {
-	Total       int64
-	TotalTimeUs int64
-}
-
-func (counter *StatsCounter) RecordStat(duration time.Duration) {
-	counter.Total += 1
-	counter.TotalTimeUs += duration.Nanoseconds() / 1000
-}
-
-func (counter *StatsCounter) Add(other *StatsCounter) {
-	counter.Total += other.Total
-	counter.TotalTimeUs += other.TotalTimeUs
-}
-
-func (counter *StatsCounter) Stats() *Stats {
-	stats := &Stats{
-		Total: counter.Total,
-	}
-	if counter.Total != 0 {
-		stats.Average = counter.TotalTimeUs / counter.Total
-	}
-	return stats
-}
 
 func logRequest(req *http.Request) {
 	log.Printf("%s %s", req.Method, req.URL.Path)
@@ -66,13 +26,10 @@ func logRequest(req *http.Request) {
 
 // A Hasher server
 type Server struct {
-	Done                chan struct{}
-	httpServer          *http.Server
-	hashDelay           time.Duration
-	hashMap             map[string]string
-	hashMapMutex        sync.Mutex
-	statsCounters       []*StatsCounter
-	statsCounterMutexes []sync.Mutex
+	Done       chan struct{}
+	httpServer *http.Server
+	hashDelay  time.Duration
+	hashStore  *HashStore
 }
 
 func NewServer(port int, hashDelay time.Duration) *Server {
@@ -86,13 +43,8 @@ func NewServer(port int, hashDelay time.Duration) *Server {
 			Addr:    fmt.Sprintf(":%d", port),
 			Handler: mux,
 		},
-		hashDelay:           hashDelay,
-		hashMap:             make(map[string]string),
-		statsCounters:       make([]*StatsCounter, 256),
-		statsCounterMutexes: make([]sync.Mutex, 256),
-	}
-	for i := range server.statsCounters {
-		server.statsCounters[i] = new(StatsCounter)
+		hashDelay: hashDelay,
+		hashStore: NewHashStore(),
 	}
 	mux.HandleFunc("/hash", func(w http.ResponseWriter, req *http.Request) {
 		//logRequest(req)
@@ -114,7 +66,7 @@ func NewServer(port int, hashDelay time.Duration) *Server {
 		logRequest(req)
 		time.Sleep(10 * time.Second)
 	})
-	go server.httpServer.ListenAndServe()
+	go server.httpServer.ListenAndServe() // errors deferred to shutdown
 	return server
 }
 
@@ -153,28 +105,18 @@ func (server *Server) PutHash(w http.ResponseWriter, req *http.Request) {
 	}
 
 	hashId := NewHashId(startTime)
-	hashIdString := hashId.String()
 
 	hash, err := HashPassword(passwordForm[0])
+	passwordForm[0] = "" // zero out password pointer
 	if err != nil {
 		log.Printf("Hash password error: %v\n", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	passwordForm[0] = "" // zero out password pointer
 
-	stripe := hashId.Random() & 0xff
-	func() {
-		server.hashMapMutex.Lock()
-		defer server.hashMapMutex.Unlock()
-		server.hashMap[hashIdString] = hash.Base64()
-	}()
+	server.hashStore.Insert(hashId, hash)
 
-	io.WriteString(w, hashIdString)
-
-	server.statsCounterMutexes[stripe].Lock()
-	defer server.statsCounterMutexes[stripe].Unlock()
-	server.statsCounters[stripe].RecordStat(time.Since(startTime))
+	io.WriteString(w, hashId.String())
 }
 
 // GET /hash/:id
@@ -202,26 +144,19 @@ func (server *Server) GetHash(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	server.hashMapMutex.Lock()
-	defer server.hashMapMutex.Unlock()
-	hash, ok := server.hashMap[id.String()]
-	if !ok {
+	hash := server.hashStore.Get(id)
+	if hash == nil {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	io.WriteString(w, hash)
+	io.WriteString(w, hash.Base64())
 }
 
 // GET /stats
 func (server *Server) GetStats(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
-	sumCounter := StatsCounter{}
-	for i, c := range server.statsCounters {
-		server.statsCounterMutexes[i].Lock()
-		defer server.statsCounterMutexes[i].Unlock()
-		sumCounter.Add(c)
-	}
-	statsJson, err := json.Marshal(sumCounter.Stats())
+
+	statsJson, err := json.Marshal(server.hashStore.Stats())
 	if err != nil {
 		log.Printf("Marshal stats json error: %v\n", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)

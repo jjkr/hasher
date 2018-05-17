@@ -83,6 +83,11 @@ func (id *HashId) String() string {
 	return str
 }
 
+type Stats struct {
+	Total   int   `json:"total"`
+	Average int64 `json:"average"`
+}
+
 type HashStore struct {
 	hashMap     map[HashId]*PasswordHash
 	totalTimeUs int64
@@ -107,4 +112,14 @@ func (hs *HashStore) Get(id *HashId) *PasswordHash {
 	hs.mutex.Lock()
 	defer hs.mutex.Unlock()
 	return hs.hashMap[*id]
+}
+
+func (hs *HashStore) Stats() Stats {
+	hs.mutex.Lock()
+	defer hs.mutex.Unlock()
+	total := len(hs.hashMap)
+	return Stats{
+		Total:   total,
+		Average: hs.totalTimeUs / int64(total),
+	}
 }
