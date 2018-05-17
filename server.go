@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"crypto/sha512"
-	"encoding/base64"
-	"encoding/binary"
-	"encoding/hex"
+	//"crypto/sha512"
+	//"encoding/base64"
+	//"encoding/binary"
+	//"encoding/hex"
 	"encoding/json"
 	//"errors"
 	"fmt"
@@ -15,66 +15,20 @@ import (
 	"net/http"
 	"runtime"
 	//"strconv"
-	"strings"
+	//"strings"
 	"sync"
 	"time"
 )
 
 // Base64 Encoded sha512 sum of given password
-func HashPassword(pw string) (string, error) {
-	hash := sha512.New()
-	_, err := hash.Write([]byte(pw))
-	if err != nil {
-		return "", err
-	}
-	return base64.StdEncoding.EncodeToString(hash.Sum(nil)), nil
-}
-
-// A 128 bit identifier
-type HashId []byte
-
-func NewHashId(t time.Time) HashId {
-	id := make([]byte, 16)
-	binary.BigEndian.PutUint64(id[:8], uint64(t.UnixNano()))
-	binary.BigEndian.PutUint64(id[8:], rand.Uint64())
-	return id
-}
-
-// Returns nil if str is not a valid hash id
-func HashIdFromString(str string) HashId {
-	//str = strings.Replace(str, "-", "", -1)
-	idBytes, err := hex.DecodeString(str)
-	if err != nil {
-		log.Printf("HashIdFromString error: %v\n", err)
-		return nil
-	}
-	if len(idBytes) > 16 {
-		return nil
-	}
-	if len(idBytes) < 16 {
-		idBytes = append(make([]byte, 16-len(idBytes)), idBytes...)
-	}
-	return idBytes
-}
-
-// Timestamp component - a UnixNano timestamp
-func (id HashId) Timestamp() int64 {
-	return int64(binary.BigEndian.Uint64(id[:8]))
-}
-
-// Random component
-func (id HashId) Random() int64 {
-	return int64(binary.BigEndian.Uint64(id[8:]))
-}
-
-func (id HashId) String() string {
-	str := hex.EncodeToString(id)
-	// pad with zeros
-	if len(str) < 32 {
-		str = strings.Repeat("0", 32-len(str)) + str
-	}
-	return str // fmt.Sprintf("%s-%s-%s-%s-%s", str[:8], str[8:12], str[12:16], str[16:20], str[20:32])
-}
+//func HashPassword(pw string) (string, error) {
+//	hash := sha512.New()
+//	_, err := hash.Write([]byte(pw))
+//	if err != nil {
+//		return "", err
+//	}
+//	return base64.StdEncoding.EncodeToString(hash.Sum(nil)), nil
+//}
 
 type Stats struct {
 	Total   int64 `json:"total"`
@@ -112,9 +66,9 @@ func logRequest(req *http.Request) {
 
 // A Hasher server
 type Server struct {
-	httpServer          *http.Server
-	HashDelay           time.Duration
 	Done                chan struct{}
+	httpServer          *http.Server
+	hashDelay           time.Duration
 	hashMap             map[string]string
 	hashMapMutex        sync.Mutex
 	statsCounters       []*StatsCounter
@@ -127,12 +81,12 @@ func NewServer(port int, hashDelay time.Duration) *Server {
 	}
 	mux := http.NewServeMux()
 	server := &Server{
+		Done: make(chan struct{}),
 		httpServer: &http.Server{
 			Addr:    fmt.Sprintf(":%d", port),
 			Handler: mux,
 		},
-		HashDelay:           hashDelay,
-		Done:                make(chan struct{}),
+		hashDelay:           hashDelay,
 		hashMap:             make(map[string]string),
 		statsCounters:       make([]*StatsCounter, 256),
 		statsCounterMutexes: make([]sync.Mutex, 256),
@@ -164,7 +118,8 @@ func NewServer(port int, hashDelay time.Duration) *Server {
 	return server
 }
 
-// Gracefully shutdown the server, waiting for existing requests to complete
+// Gracefully shutdown the server.
+// The Done channel will be closed when the server shuts down
 func (server *Server) Shutdown() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	go func() {
@@ -206,13 +161,13 @@ func (server *Server) PutHash(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	passwordForm[0] = ""
+	passwordForm[0] = "" // zero out password pointer
 
 	stripe := hashId.Random() & 0xff
 	func() {
 		server.hashMapMutex.Lock()
 		defer server.hashMapMutex.Unlock()
-		server.hashMap[hashIdString] = hash
+		server.hashMap[hashIdString] = hash.Base64()
 	}()
 
 	io.WriteString(w, hashIdString)
@@ -235,13 +190,13 @@ func (server *Server) GetHash(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	id := HashIdFromString(req.URL.Path[baseLen:])
-	if id == nil {
+	id, err := HashIdFromString(req.URL.Path[baseLen:])
+	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
-	if id.Timestamp() > (time.Now().UTC().Add(-server.HashDelay)).UnixNano() {
+	if id.Timestamp() > (time.Now().UTC().Add(-server.hashDelay)).UnixNano() {
 		log.Printf("Hash id %v not available yet\n", id)
 		w.WriteHeader(http.StatusNotFound)
 		return
