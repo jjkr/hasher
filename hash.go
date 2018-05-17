@@ -12,19 +12,25 @@ import (
 	"time"
 )
 
-type PasswordHash []byte
+type PasswordHash [64]byte
 
-func HashPassword(pw string) (PasswordHash, error) {
-	hash := sha512.New()
-	_, err := hash.Write([]byte(pw))
+func HashPassword(pw string) (*PasswordHash, error) {
+	hasher := sha512.New()
+	_, err := hasher.Write([]byte(pw))
 	if err != nil {
 		return nil, err
 	}
-	return hash.Sum(nil), nil
+	hash := PasswordHash{}
+	copy(hash.Bytes(), hasher.Sum(nil))
+	return &hash, nil
 }
 
-func (hash PasswordHash) Base64() string {
-	return base64.StdEncoding.EncodeToString(hash)
+func (hash *PasswordHash) Bytes() []byte {
+	return (*hash)[:]
+}
+
+func (hash *PasswordHash) Base64() string {
+	return base64.StdEncoding.EncodeToString(hash.Bytes())
 }
 
 // A 128 bit identifier
@@ -78,14 +84,27 @@ func (id *HashId) String() string {
 }
 
 type HashStore struct {
-	hashMap   map[HashId]PasswordHash
-	totalTime int
-	mutex     sync.Mutex
+	hashMap     map[HashId]*PasswordHash
+	totalTimeUs int64
+	mutex       sync.Mutex
 }
 
-func (hs *HashStore) Insert(id *HashId, ph PasswordHash) {
-	mutex.Lock()
-	defer mutex.Unlock()
-	hashMap[*id] = ph
-	hs.totalTime += (time.Now.UTC().UnixNano() - id.Timestamp()) / 1000
+func NewHashStore() *HashStore {
+	return &HashStore{
+		hashMap:     make(map[HashId]*PasswordHash),
+		totalTimeUs: 0,
+	}
+}
+
+func (hs *HashStore) Insert(id *HashId, ph *PasswordHash) {
+	hs.mutex.Lock()
+	defer hs.mutex.Unlock()
+	hs.hashMap[*id] = ph
+	hs.totalTimeUs += (time.Now().UTC().UnixNano() - id.Timestamp()) / int64(1000)
+}
+
+func (hs *HashStore) Get(id *HashId) *PasswordHash {
+	hs.mutex.Lock()
+	defer hs.mutex.Unlock()
+	return hs.hashMap[*id]
 }
