@@ -33,6 +33,13 @@ func TestBase64EmptyPassword(t *testing.T) {
 	}
 }
 
+func BenchmarkHashPassword(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		hash, _ := HashPassword("asdfasdfasdfasdfasdfasdfasdfasdfasdf")
+		hash.Base64()
+	}
+}
+
 func TestNewHashId(t *testing.T) {
 	NewHashId(time.Now())
 }
