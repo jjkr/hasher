@@ -125,7 +125,10 @@ func (server *Server) PutHash(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	server.hashStore.Insert(hashId, hash)
+	go func() {
+		time.Sleep(server.hashDelay)
+		server.hashStore.Insert(hashId, hash)
+	}()
 
 	w.WriteHeader(http.StatusAccepted)
 	io.WriteString(w, hashId.String())
@@ -146,12 +149,6 @@ func (server *Server) GetHash(w http.ResponseWriter, req *http.Request) {
 
 	id, err := HashIdFromString(req.URL.Path[baseLen:])
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-
-	if id.Timestamp() > (time.Now().UTC().Add(-server.hashDelay)).UnixNano() {
-		log.Printf("Hash id %v not available yet\n", id)
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}

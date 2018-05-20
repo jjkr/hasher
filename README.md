@@ -18,7 +18,7 @@ The resulting hasher executable can be run with a single argument, the port to b
 
 ## API
 
- POST /hash
- GET  /hash/:id
- GET  /stats
- POST /shutdown
+   POST /hash
+   GET  /hash/:id
+   GET  /stats
+   POST /shutdown
