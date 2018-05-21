@@ -17,7 +17,7 @@ func TestHashPassword(t *testing.T) {
 	// echo -n "GoBroncos!漂亮的马" | sha512sum |
 	//   awk '{print $1}' | xxd -r -p | base64 -w 0
 	expected := "1MCECi+W8NtlU3VATB4O8m3Ppko6h4Dw+gB1B8Tg74cNVnhT32wZoXcks4mKXHYRIRwGpeC6tjNgZiJZrhgCMg=="
-	if h := hash.Base64(); h != expected {
+	if h := hash.String(); h != expected {
 		t.Errorf("Wrong hash, got %s", h)
 	}
 }
@@ -28,7 +28,7 @@ func TestBase64EmptyPassword(t *testing.T) {
 		t.Error(err)
 	}
 	expected := "z4PhNX7vuL3xVChQ1m2AB9Yg5AULVxXcg/SpIdNs6c5H0NE8XYXysP+DGNKHfuwvY7kxvUdBeoGlODJ6+SfaPg=="
-	if hash.Base64() != expected {
+	if hash.String() != expected {
 		t.Errorf("Wrong hash")
 	}
 }
@@ -36,7 +36,7 @@ func TestBase64EmptyPassword(t *testing.T) {
 func BenchmarkHashPassword(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		hash, _ := HashPassword("asdfasdfasdfasdfasdfasdfasdfasdfasdf")
-		hash.Base64()
+		hash.String()
 	}
 }
 
@@ -113,18 +113,5 @@ func TestHashIdStringPad(t *testing.T) {
 	}
 	if len(id.String()) != 32 {
 		t.Error("String did not pad")
-	}
-}
-
-func TestHashStore(t *testing.T) {
-	hs := NewHashStore()
-	id := NewHashId(time.Now())
-	hash, err := HashPassword("password")
-	hs.Insert(id, hash)
-	if err != nil {
-		t.Error(err)
-	}
-	if got := hs.Get(id); got != hash {
-		t.Errorf("Expected %s, got %s", hash.Base64(), got.Base64())
 	}
 }

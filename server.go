@@ -17,6 +17,25 @@ func logRequest(req *http.Request) {
 	log.Printf("%s %s", req.Method, req.URL.Path)
 }
 
+type Stats struct {
+	Count       int64
+	TotalTimeUs int64
+}
+
+func (stats *Stats) JsonSummary() ([]byte, error) {
+	var average float64
+	if stats.Count > 0 {
+		average = float64(stats.TotalTimeUs) / float64(stats.Count)
+	}
+	return json.Marshal(struct {
+		Total   int64   `json:"total"`
+		Average float64 `json:"average"`
+	}{
+		stats.Count,
+		average,
+	})
+}
+
 // A Hasher server
 type Server struct {
 	Done          chan struct{}
@@ -25,7 +44,10 @@ type Server struct {
 	listener      net.Listener
 	httpServer    *http.Server
 	hashDelay     time.Duration
-	hashStore     *HashStore
+	hashMapMutex  sync.Mutex
+	hashMap       map[HashId]PasswordHash
+	statsMutex    sync.Mutex
+	stats         *Stats
 }
 
 func StartServer(port int, hashDelay time.Duration) (*Server, error) {
@@ -46,7 +68,8 @@ func StartServer(port int, hashDelay time.Duration) (*Server, error) {
 			Handler: mux,
 		},
 		hashDelay: hashDelay,
-		hashStore: NewHashStore(),
+		hashMap:   make(map[HashId]PasswordHash),
+		stats:     &Stats{},
 	}
 	mux.HandleFunc("/hash", func(w http.ResponseWriter, req *http.Request) {
 		//logRequest(req)
@@ -77,6 +100,7 @@ func StartServer(port int, hashDelay time.Duration) (*Server, error) {
 func (server *Server) Shutdown() {
 	server.shutdownMutex.Lock()
 	if server.running {
+		server.running = false
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		go func() {
 			defer server.shutdownMutex.Unlock()
@@ -103,35 +127,35 @@ func (server *Server) PutHash(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	err := req.ParseForm()
-	if err != nil {
-		log.Printf("Failed to parse form: %v\n", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	passwordForm := req.Form["password"]
-	if len(passwordForm) < 1 {
+	password := req.FormValue("password")
+	if len(password) == 0 {
 		http.Error(w, "Missing password field", http.StatusBadRequest)
 		return
 	}
 
 	hashId := NewHashId(startTime)
 
-	hash, err := HashPassword(passwordForm[0])
-	passwordForm[0] = "" // zero out password pointer
-	if err != nil {
-		log.Printf("Hash password error: %v\n", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
+	// Run long running hash function on a separate goroutine
 	go func() {
 		time.Sleep(server.hashDelay)
-		server.hashStore.Insert(hashId, hash)
+		hash, err := HashPassword(password)
+		if err != nil {
+			log.Printf("Hash password error: %v\n", err)
+			return
+		}
+		server.hashMapMutex.Lock()
+		defer server.hashMapMutex.Unlock()
+		server.hashMap[*hashId] = hash
 	}()
 
 	w.WriteHeader(http.StatusAccepted)
 	io.WriteString(w, hashId.String())
+
+	endTime := time.Now().UTC()
+	server.statsMutex.Lock()
+	defer server.statsMutex.Unlock()
+	server.stats.Count += 1
+	server.stats.TotalTimeUs += int64(endTime.Sub(startTime)) / 1000
 }
 
 // GET /hash/:id
@@ -153,19 +177,21 @@ func (server *Server) GetHash(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	hash := server.hashStore.Get(id)
-	if hash == nil {
+	server.hashMapMutex.Lock()
+	defer server.hashMapMutex.Unlock()
+	hash := server.hashMap[*id]
+	if hash == "" {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	io.WriteString(w, hash.Base64())
+	w.Write(hash.Bytes())
 }
 
 // GET /stats
 func (server *Server) GetStats(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 
-	statsJson, err := json.Marshal(server.hashStore.Stats())
+	statsJson, err := server.stats.JsonSummary()
 	if err != nil {
 		log.Printf("Marshal stats json error: %v\n", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)

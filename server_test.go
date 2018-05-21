@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	//"strings"
@@ -53,6 +52,17 @@ func TestStartServerNegativePort(t *testing.T) {
 	if server != nil {
 		t.Error("Expected server to be nil")
 	}
+}
+
+func TestServerShutdownTwice(t *testing.T) {
+	server, err := StartServer(TestPort, 0)
+	if err != nil {
+		t.Error(err)
+	}
+
+	server.Shutdown()
+	server.Shutdown()
+	<-server.Done
 }
 
 func TestHashPost(t *testing.T) {
@@ -134,9 +144,10 @@ func TestHashIntegration(t *testing.T) {
 	}
 	client := &http.Client{}
 
+	pw := "PeachPie"
 	postResponse, err := client.PostForm(
 		GetTestUrl("/hash"),
-		url.Values{"password": {"PeachPie"}})
+		url.Values{"password": {pw}})
 	if err != nil {
 		t.Error(err)
 	}
@@ -158,7 +169,14 @@ func TestHashIntegration(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	log.Println(string(hash))
+	expectedHash, err := HashPassword(pw)
+	if err != nil {
+		t.Error(err)
+	}
+	if string(hash) != expectedHash.String() {
+		t.Errorf("For password %s got hash %s, expected %s\n",
+			pw, hash, expectedHash)
+	}
 
 	shutdownResponse, err := client.Get("http://localhost:8080/shutdown")
 	if err != nil {

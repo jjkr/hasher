@@ -8,29 +8,26 @@ import (
 	"math/rand"
 	//"strings"
 	"errors"
-	"sync"
 	"time"
 )
 
-type PasswordHash [64]byte
+type PasswordHash string
 
-func HashPassword(pw string) (*PasswordHash, error) {
+func HashPassword(pw string) (PasswordHash, error) {
 	hasher := sha512.New()
 	_, err := hasher.Write([]byte(pw))
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	hash := PasswordHash{}
-	copy(hash.Bytes(), hasher.Sum(nil))
-	return &hash, nil
+	return PasswordHash(base64.StdEncoding.EncodeToString(hasher.Sum(nil))), nil
 }
 
-func (hash *PasswordHash) Bytes() []byte {
-	return (*hash)[:]
+func (hash PasswordHash) Bytes() []byte {
+	return []byte(hash)
 }
 
-func (hash *PasswordHash) Base64() string {
-	return base64.StdEncoding.EncodeToString(hash.Bytes())
+func (hash PasswordHash) String() string {
+	return string(hash)
 }
 
 // A 128 bit identifier
@@ -81,45 +78,4 @@ func (id *HashId) Random() int64 {
 func (id *HashId) String() string {
 	str := hex.EncodeToString(id.Bytes())
 	return str
-}
-
-type Stats struct {
-	Total   int   `json:"total"`
-	Average int64 `json:"average"`
-}
-
-type HashStore struct {
-	hashMap     map[HashId]*PasswordHash
-	totalTimeUs int64
-	mutex       sync.Mutex
-}
-
-func NewHashStore() *HashStore {
-	return &HashStore{
-		hashMap:     make(map[HashId]*PasswordHash),
-		totalTimeUs: 0,
-	}
-}
-
-func (hs *HashStore) Insert(id *HashId, ph *PasswordHash) {
-	hs.mutex.Lock()
-	defer hs.mutex.Unlock()
-	hs.hashMap[*id] = ph
-	hs.totalTimeUs += (time.Now().UTC().UnixNano() - id.Timestamp()) / int64(1000)
-}
-
-func (hs *HashStore) Get(id *HashId) *PasswordHash {
-	hs.mutex.Lock()
-	defer hs.mutex.Unlock()
-	return hs.hashMap[*id]
-}
-
-func (hs *HashStore) Stats() Stats {
-	hs.mutex.Lock()
-	defer hs.mutex.Unlock()
-	total := len(hs.hashMap)
-	return Stats{
-		Total:   total,
-		Average: hs.totalTimeUs / int64(total),
-	}
 }
