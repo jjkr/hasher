@@ -23,9 +23,9 @@ The server will listen on all available interfaces.
 
 ### POST /hash
 
-Creates a new hash and returns the id of the newly created hash. The hash is not available immediately. Instead, clients have to poll the get endpoint until the id is available.
+Creates a new hash and returns the id of the newly created hash. The hash is not available immediately. Instead, clients have to poll the GET endpoint until the hash is available. Hash id increases with each request.
 
-Returns: 202 Accepted and the hash's id in the body of the response. A hash id is a 128 bit hex encoded value
+Returns: 202 Accepted with the hash's id in the body of the response. A hash id is a 128 bit hex encoded value
 
 Example:
 
