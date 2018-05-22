@@ -23,6 +23,9 @@ type Stats struct {
 }
 
 func (stats *Stats) JsonSummary() ([]byte, error) {
+	if stats.Count < 0 {
+		return nil, errors.New("Invalid stats count")
+	}
 	var average float64
 	if stats.Count > 0 {
 		average = float64(stats.TotalTimeUs) / float64(stats.Count)

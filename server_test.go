@@ -6,19 +6,60 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	//"strings"
 	"testing"
 	"time"
 )
 
-const TestPort int = 8080
+func TestStatsJson(t *testing.T) {
+	var count int64 = 129
+	var totalTime int64 = 23723
+	stats := Stats{
+		Count:       count,
+		TotalTimeUs: totalTime,
+	}
+	jsonBytes, err := stats.JsonSummary()
+	if err != nil {
+		t.Error(err)
+	}
+	expectedAvg := float64(totalTime) / float64(count)
+	expected := fmt.Sprintf("{\"total\":%d,\"average\":%.14f}",
+		count, expectedAvg)
+	if string(jsonBytes) != expected {
+		t.Errorf("Expected %s, got %s", expected, jsonBytes)
+	}
+}
 
-func GetTestUrl(endpoint string) string {
-	return fmt.Sprintf("http://localhost:%d%s", TestPort, endpoint)
+func TestStatsZeroJson(t *testing.T) {
+	stats := Stats{}
+	jsonBytes, err := stats.JsonSummary()
+	if err != nil {
+		t.Error(err)
+	}
+	expected := "{\"total\":0,\"average\":0}"
+	if string(jsonBytes) != expected {
+		t.Errorf("Expected %s, got %s", expected, jsonBytes)
+	}
+}
+
+func TestStatsNegativeCount(t *testing.T) {
+	stats := Stats{
+		Count:       -5,
+		TotalTimeUs: 23998,
+	}
+	_, err := stats.JsonSummary()
+	if err == nil {
+		t.Errorf("Expected error, got nil")
+	}
+}
+
+const testPort int = 8080
+
+func getTestUrl(endpoint string) string {
+	return fmt.Sprintf("http://localhost:%d%s", testPort, endpoint)
 }
 
 func TestServerStartAndShutdown(t *testing.T) {
-	server, err := StartServer(TestPort, 0)
+	server, err := StartServer(testPort, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -28,11 +69,11 @@ func TestServerStartAndShutdown(t *testing.T) {
 }
 
 func TestStartServerPortAlreadyBound(t *testing.T) {
-	server, err := StartServer(TestPort, 0)
+	server, err := StartServer(testPort, 0)
 	if err != nil {
 		t.Error(err)
 	}
-	duplicateServer, err := StartServer(TestPort, 0)
+	duplicateServer, err := StartServer(testPort, 0)
 	if err == nil {
 		t.Error("Expected error to be non-nil")
 	}
@@ -55,7 +96,7 @@ func TestStartServerNegativePort(t *testing.T) {
 }
 
 func TestServerShutdownTwice(t *testing.T) {
-	server, err := StartServer(TestPort, 0)
+	server, err := StartServer(testPort, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -66,14 +107,14 @@ func TestServerShutdownTwice(t *testing.T) {
 }
 
 func TestHashPost(t *testing.T) {
-	server, err := StartServer(TestPort, time.Nanosecond)
+	server, err := StartServer(testPort, time.Nanosecond)
 	if err != nil {
 		t.Error(err)
 	}
 	client := &http.Client{}
 
 	postResponse, err := client.PostForm(
-		GetTestUrl("/hash"),
+		getTestUrl("/hash"),
 		url.Values{"password": {"PeachPie"}})
 	if err != nil {
 		t.Error(err)
@@ -102,7 +143,7 @@ func TestHashPostMissingPassword(t *testing.T) {
 	client := &http.Client{}
 
 	postResponse, err := client.PostForm(
-		GetTestUrl("/hash"), url.Values{})
+		getTestUrl("/hash"), url.Values{})
 	if err != nil {
 		t.Error(err)
 	}
@@ -123,7 +164,7 @@ func TestHashGetWrongUrl(t *testing.T) {
 	}
 	client := &http.Client{}
 
-	getResponse, err := client.Get(GetTestUrl("/hash"))
+	getResponse, err := client.Get(getTestUrl("/hash"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -146,7 +187,7 @@ func TestHashIntegration(t *testing.T) {
 
 	pw := "PeachPie"
 	postResponse, err := client.PostForm(
-		GetTestUrl("/hash"),
+		getTestUrl("/hash"),
 		url.Values{"password": {pw}})
 	if err != nil {
 		t.Error(err)
@@ -160,7 +201,7 @@ func TestHashIntegration(t *testing.T) {
 		t.Errorf("POST /hash got bad status: %d\n", postResponse.StatusCode)
 	}
 
-	getResponse, err := client.Get(GetTestUrl(fmt.Sprintf("/hash/%s", id)))
+	getResponse, err := client.Get(getTestUrl(fmt.Sprintf("/hash/%s", id)))
 	if err != nil {
 		t.Error(err)
 	}
@@ -194,7 +235,7 @@ func BenchmarkPostHash(b *testing.B) {
 		b.Error(err)
 	}
 	client := &http.Client{}
-	formValues := url.Values{"password": {"PeachPie"}}
+	formValues := url.Values{"password": {"RogerRoger"}}
 	for i := 0; i < b.N; i++ {
 		resp, err := client.PostForm("http://localhost:8080/hash", formValues)
 		if err != nil {
