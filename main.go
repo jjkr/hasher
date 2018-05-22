@@ -24,7 +24,7 @@ func main() {
 
 	port, err := strconv.Atoi(os.Args[1])
 	if err != nil {
-		fmt.Printf("ERROR bad port: %s", os.Args[1])
+		fmt.Printf("ERROR bad port: %s\n", os.Args[1])
 		showUsage()
 		os.Exit(-1)
 	}
@@ -33,6 +33,6 @@ func main() {
 		log.Printf("Error starting server: %s", err)
 		os.Exit(-1)
 	}
-	log.Printf("Starting hasher server on port %d\n", port)
+	log.Printf("Starting hasher server on port %d", port)
 	<-server.Done
 }
