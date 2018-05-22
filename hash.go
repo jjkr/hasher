@@ -41,7 +41,6 @@ func NewHashId(t time.Time) *HashId {
 }
 
 func HashIdFromString(str string) (*HashId, error) {
-	//str = strings.Replace(str, "-", "", -1)
 	idBytes, err := hex.DecodeString(str)
 	if err != nil {
 		return nil, err
@@ -67,11 +66,6 @@ func (id *HashId) Timestamp() int64 {
 		panic("HashId is not correct size")
 	}
 	return int64(binary.BigEndian.Uint64(id[:8]))
-}
-
-// Random component
-func (id *HashId) Random() int64 {
-	return int64(binary.BigEndian.Uint64(id[8:]))
 }
 
 func (id *HashId) String() string {
