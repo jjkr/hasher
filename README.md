@@ -5,19 +5,25 @@ A password hashing web service
 
 ### Build
 
-To build the main hasher executable simply clone the repo and run go build.
+To build the main hasher executable simply clone the repo and run ```go build```.
 
     $ git clone https://github.com/jjkr/hasher.git
     $ cd hasher
     $ go build
 
+### Test
+
+Unit tests are run with ```go test```
+
+    $ go test
+    PASS
+    ok      github.com/jjkr/hasher  0.025s
+
 ### Run
 
 The resulting hasher executable can be run with a single argument, the port to bind to
 
-    $./hasher 8080
-
-The server will listen on all available interfaces.
+    $ ./hasher 8080
 
 ## API
 
@@ -74,7 +80,7 @@ Example:
 
 ### GET /stats
 
-Get statistics about hash requests. Returns a JSON object with the total number of successful requests to create a hash and the average amount of time it took to process each request in microseconds.
+Get statistics about hash requests. Returns a JSON object with the total number of valid POST hash requests and the average amount of time it took to process each request in microseconds. The processing time does not include the actual password hashing, just the time to handle the POST request.
 
 Example:
 
@@ -118,3 +124,5 @@ Example:
     <
     * Connection #0 to host localhost left intact
 
+
+Copyright Joe Kramer 2018. All rights reserved
