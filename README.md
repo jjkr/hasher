@@ -1,7 +1,8 @@
-# hasher
+# Hasher
 A password hashing web service
 
 ## Getting Started
+
 ### Build
 
 To build the main hasher executable simply clone the repo and run go build.
@@ -20,7 +21,7 @@ The server will listen on all available interfaces.
 
 ## API
 
-###POST /hash
+### POST /hash
 
 Creates a new hash and returns the id of the newly created hash. The hash is not available immediately. Instead, clients have to poll the get endpoint until the id is available.
 
@@ -48,32 +49,72 @@ Example:
     * Connection #0 to host localhost left intact
     15307cee701bf5617fc3fedb06e324de
 
-###GET  /hash/:id
+### GET /hash/:id
 
-Get the hash for the given id. Returns a base64 encoded hash value or 404 if not found.
+Get the hash for the given id. Returns a base64 encoded hash value or 404 if not found or if the hash has not finished computing.
 
 Example:
 
-	$ curl -v http://localhost:5000/hash/15307cee701bf5617fc3fedb06e324de
-	*   Trying ::1...
-	* TCP_NODELAY set
-	* Connected to localhost (::1) port 5000 (#0)
-	> GET /hash/15307cee701bf5617fc3fedb06e324de HTTP/1.1
-	> Host: localhost:5000
-	> User-Agent: curl/7.54.0
-	> Accept: */*
-	> 
-	< HTTP/1.1 200 OK
-	< Date: Sun, 20 May 2018 23:14:57 GMT
-	< Content-Length: 88
-	< Content-Type: text/plain; charset=utf-8
-	< 
-	* Connection #0 to host localhost left intact
-	iwUTRA9dzx5DPVVTDk12e1ZzgGvKf3Bl56YJDruE92sPwk9VYEJ4gT9h+FK/941r17Ecq67YLjvjnikdpnfpZA==
+    $ curl -v http://localhost:5000/hash/15307cee701bf5617fc3fedb06e324de
+    *   Trying ::1...
+    * TCP_NODELAY set
+    * Connected to localhost (::1) port 5000 (#0)
+    > GET /hash/15307cee701bf5617fc3fedb06e324de HTTP/1.1
+    > Host: localhost:5000
+    > User-Agent: curl/7.54.0
+    > Accept: */*
+    > 
+    < HTTP/1.1 200 OK
+    < Date: Sun, 20 May 2018 23:14:57 GMT
+    < Content-Length: 88
+    < Content-Type: text/plain; charset=utf-8
+    < 
+    * Connection #0 to host localhost left intact
+    iwUTRA9dzx5DPVVTDk12e1ZzgGvKf3Bl56YJDruE92sPwk9VYEJ4gT9h+FK/941r17Ecq67YLjvjnikdpnfpZA==
 
-###GET  /stats
+### GET /stats
 
 Get statistics about hash requests. Returns a JSON object with the total number of successful requests to create a hash and the average amount of time it took to process each request in microseconds.
 
+Example:
 
-###POST /shutdown
+    $ curl -v http://localhost:8080/stats
+    *   Trying ::1...
+    * TCP_NODELAY set
+    * Connected to localhost (::1) port 8080 (#0)
+    > GET /stats HTTP/1.1
+    > Host: localhost:8080
+    > User-Agent: curl/7.54.0
+    > Accept: */*
+    >
+    < HTTP/1.1 200 OK
+    < Date: Mon, 21 May 2018 01:06:37 GMT
+    < Content-Length: 45
+    < Content-Type: text/plain; charset=utf-8
+    <
+    * Connection #0 to host localhost left intact
+    {"total":700000,"average":23.403601428571427}
+
+### POST /shutdown
+
+Shutdown the webserver, waiting for all active requests to complete.
+
+Returns 200 OK
+
+Example:
+
+    $ curl -v http://localhost:8080/shutdown
+    *   Trying ::1...
+    * TCP_NODELAY set
+    * Connected to localhost (::1) port 8080 (#0)
+    > GET /shutdown HTTP/1.1
+    > Host: localhost:8080
+    > User-Agent: curl/7.54.0
+    > Accept: */*
+    >
+    < HTTP/1.1 200 OK
+    < Date: Tue, 22 May 2018 00:47:44 GMT
+    < Content-Length: 0
+    <
+    * Connection #0 to host localhost left intact
+
