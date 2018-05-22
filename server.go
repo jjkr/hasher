@@ -75,11 +75,9 @@ func StartServer(port int, hashDelay time.Duration) (*Server, error) {
 		stats:     &Stats{},
 	}
 	mux.HandleFunc("/hash", func(w http.ResponseWriter, req *http.Request) {
-		//logRequest(req)
 		server.PutHash(w, req)
 	})
 	mux.HandleFunc("/hash/", func(w http.ResponseWriter, req *http.Request) {
-		//logRequest(req)
 		server.GetHash(w, req)
 	})
 	mux.HandleFunc("/stats", func(w http.ResponseWriter, req *http.Request) {

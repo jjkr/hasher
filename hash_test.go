@@ -2,8 +2,6 @@ package main
 
 import (
 	"encoding/hex"
-	//"log"
-	//"strconv"
 	"testing"
 	"time"
 )

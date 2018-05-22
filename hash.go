@@ -5,9 +5,8 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
-	"math/rand"
-	//"strings"
 	"errors"
+	"math/rand"
 	"time"
 )
 
